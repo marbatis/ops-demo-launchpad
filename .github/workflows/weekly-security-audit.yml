@@ -1,0 +1,55 @@
+name: Weekly Security Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 13 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Gitleaks
+        shell: bash
+        run: |
+          if command -v gitleaks >/dev/null 2>&1; then
+            gitleaks version
+            exit 0
+          fi
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh | bash -s -- -b "$HOME/.local/bin" v8.24.2
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/gitleaks" version
+
+      - name: Run Weekly Audit
+        shell: bash
+        env:
+          GH_OWNER: ${{ github.repository_owner }}
+          AUDIT_GH_TOKEN: ${{ secrets.AUDIT_GH_TOKEN }}
+          GITHUB_TOKEN_FALLBACK: ${{ github.token }}
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          chmod +x scripts/weekly_security_audit.sh
+          scripts/weekly_security_audit.sh
+
+      - name: Upload Audit Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-security-audit
+          path: |
+            reports/security-audit/latest.md
+            reports/security-audit/latest_gitleaks_summary.csv
+            reports/security-audit/latest_secret_scanning_summary.csv
+            reports/security-audit/latest_heroku_summary.csv
+            reports/security-audit/*/report.md
+            reports/security-audit/*/github_gitleaks_summary.csv
+            reports/security-audit/*/github_secret_scanning_summary.csv
+            reports/security-audit/*/heroku_config_summary.csv

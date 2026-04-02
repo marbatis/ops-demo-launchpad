@@ -30,6 +30,35 @@ uvicorn app.main:app --reload
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
+## Weekly Security Audit
+
+This repo includes a scheduled security audit workflow:
+
+- Workflow: `.github/workflows/weekly-security-audit.yml`
+- Script: `scripts/weekly_security_audit.sh`
+- Schedule: every Monday at 13:00 UTC (`cron: 0 13 * * 1`)
+- Also runnable manually via `workflow_dispatch`
+
+The audit does three checks:
+
+- scans every public `marbatis/*` repo with `gitleaks`
+- reads GitHub secret-scanning open alerts per public repo
+- audits Heroku app config vars for suspicious secret-like values
+
+Recommended GitHub secrets for this repo:
+
+- `AUDIT_GH_TOKEN`: PAT with enough read scope to query secret-scanning alerts across your repos
+- `HEROKU_API_KEY`: API key for reading app config-vars through the Heroku API
+
+Local run:
+
+```bash
+chmod +x scripts/weekly_security_audit.sh
+scripts/weekly_security_audit.sh
+```
+
+Outputs are written to `reports/security-audit/`.
+
 ## Configuration
 
 Edit [`config/apps.json`](/Users/marcelosilveira/Documents/Playground/config/apps.json) for each card:
