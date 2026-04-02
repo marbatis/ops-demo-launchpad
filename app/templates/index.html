@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">Single entrypoint for the Heroku estate</p>
+      <h1>{{ title }}</h1>
+      <p class="subtitle">{{ subtitle }}</p>
+      <div class="stats">
+        <div class="stat">
+          <span class="label">Apps</span>
+          <strong>{{ total_count }}</strong>
+        </div>
+        <div class="stat">
+          <span class="label">Configured URLs</span>
+          <strong>{{ configured_count }}</strong>
+        </div>
+        <div class="stat">
+          <span class="label">Enabled Links</span>
+          <strong>{{ enabled_count }}</strong>
+        </div>
+      </div>
+      <p class="audit">Audit baseline: {{ audit_date }}. Cards stay disabled until the target app is confirmed live.</p>
+    </section>
+
+    <section class="controls">
+      <label class="search">
+        <span>Find app</span>
+        <input id="search" type="search" placeholder="Search by name, tag, or summary">
+      </label>
+    </section>
+
+    <section class="grid" id="app-grid">
+      {% for app in apps %}
+      <article
+        class="card {% if app.is_enabled %}card-live{% else %}card-pending{% endif %}"
+        data-search="{{ app.name }} {{ app.slug }} {{ app.category }} {{ app.description }} {{ ' '.join(app.tags) }}"
+      >
+        <div class="card-top">
+          <p class="category">{{ app.category }}</p>
+          <span class="status {% if app.is_enabled %}status-live{% else %}status-pending{% endif %}">
+            {% if app.is_enabled %}live{% else %}pending{% endif %}
+          </span>
+        </div>
+        <h2>{{ app.name }}</h2>
+        <p class="description">{{ app.description }}</p>
+        <ul class="tags">
+          {% for tag in app.tags %}
+          <li>{{ tag }}</li>
+          {% endfor %}
+        </ul>
+        <div class="actions">
+          {% if app.is_enabled %}
+          <a class="button button-primary" href="{{ app.launch_path }}">Open app</a>
+          {% else %}
+          <span class="button button-disabled">Waiting for deploy</span>
+          {% endif %}
+          <a class="button button-secondary" href="{{ app.repo_url }}" target="_blank" rel="noreferrer">Repo</a>
+        </div>
+        <p class="target">{{ app.target_url or "No target URL configured yet" }}</p>
+      </article>
+      {% endfor %}
+    </section>
+  </main>
+
+  <script>
+    const search = document.getElementById("search");
+    const cards = Array.from(document.querySelectorAll(".card"));
+
+    search.addEventListener("input", () => {
+      const term = search.value.trim().toLowerCase();
+      cards.forEach((card) => {
+        const haystack = card.dataset.search.toLowerCase();
+        card.style.display = haystack.includes(term) ? "" : "none";
+      });
+    });
+  </script>
+</body>
+</html>
+

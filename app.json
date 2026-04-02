@@ -1,0 +1,13 @@
+{
+  "name": "ops-demo-launchpad",
+  "description": "Single-entry Heroku launchpad for the 12 demo webapps.",
+  "repository": "https://github.com/marbatis/ops-demo-launchpad",
+  "keywords": ["python", "fastapi", "heroku", "launchpad"],
+  "env": {
+    "APP_CONFIG_PATH": {
+      "description": "Optional override for the launchpad app registry JSON file.",
+      "required": false
+    }
+  }
+}
+

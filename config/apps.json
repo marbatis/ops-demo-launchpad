@@ -1,0 +1,127 @@
+{
+  "title": "Ops Demo Launchpad",
+  "subtitle": "One Heroku landing page for the 12 demo apps. Each card redirects to the live target Heroku app.",
+  "audit_date": "2026-04-01",
+  "apps": [
+    {
+      "slug": "release-risk-copilot",
+      "name": "Release Risk Copilot",
+      "category": "Release engineering",
+      "description": "Policy-first release risk assessment with deterministic rules, evidence retrieval, and AI-generated explanations.",
+      "tags": ["devops", "risk-assessment", "policy-engine"],
+      "repo_url": "https://github.com/marbatis/release-risk-copilot",
+      "target_url": "https://release-risk-copilot-3f95ebdcfcc5.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "incident-triage-evidence-agent",
+      "name": "Incident Triage Evidence Agent",
+      "category": "Incident response",
+      "description": "Deterministic incident triage with grounded evidence and optional LLM memo.",
+      "tags": ["incident-response", "evidence", "fastapi"],
+      "repo_url": "https://github.com/marbatis/incident-triage-evidence-agent",
+      "target_url": "https://incident-triage-evidence-agent-9189564f77a4.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "false-green-dashboard-simulator",
+      "name": "False Green Dashboard Simulator",
+      "category": "Operational awareness",
+      "description": "Deterministic simulator showing false-green dashboards and hidden failure drift.",
+      "tags": ["streamlit", "simulation", "dashboards"],
+      "repo_url": "https://github.com/marbatis/false-green-dashboard-simulator",
+      "target_url": "https://false-green-sim-marbatis-62dc69f6c564.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "runbook-grounding-agent",
+      "name": "Runbook Grounding Agent",
+      "category": "Runbooks",
+      "description": "Grounded runbook Q&A with deterministic retrieval, citation enforcement, and abstention.",
+      "tags": ["retrieval", "runbooks", "citations"],
+      "repo_url": "https://github.com/marbatis/runbook-grounding-agent",
+      "target_url": "https://runbook-grounding-agent-59abc227127b.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "change-impact-mapper",
+      "name": "Change Impact Mapper",
+      "category": "Dependency mapping",
+      "description": "Deterministic blast radius mapping over a synthetic hybrid dependency graph.",
+      "tags": ["dependencies", "blast-radius", "graph"],
+      "repo_url": "https://github.com/marbatis/change-impact-mapper",
+      "target_url": "https://change-impact-mapper-5f690cd4bc31.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "flaky-test-detective",
+      "name": "Flaky Test Detective",
+      "category": "CI quality",
+      "description": "Deterministic flake detection and remediation recommendations over synthetic CI history.",
+      "tags": ["ci", "testing", "quality"],
+      "repo_url": "https://github.com/marbatis/flaky-test-detective",
+      "target_url": "https://flaky-test-detective-8843d479e48b.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "ops-agent-eval-harness",
+      "name": "Ops Agent Eval Harness",
+      "category": "Evaluation",
+      "description": "Eval harness for operations-focused agent workflows with deterministic scenarios and scoring.",
+      "tags": ["evals", "agents", "scoring"],
+      "repo_url": "https://github.com/marbatis/ops-agent-eval-harness",
+      "target_url": "https://ops-agent-eval-harness-cccbc3dd7428.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "validation-signal-aggregator",
+      "name": "Validation Signal Aggregator",
+      "category": "Signals",
+      "description": "Aggregates validation signals into a deterministic release-readiness view.",
+      "tags": ["signals", "aggregation", "release-readiness"],
+      "repo_url": "https://github.com/marbatis/validation-signal-aggregator",
+      "target_url": "https://validation-signal-aggregator-82d7b426fdb1.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "cutover-commander",
+      "name": "Cutover Commander",
+      "category": "Change execution",
+      "description": "Guided cutover planning and status tracking for operational change windows.",
+      "tags": ["cutover", "operations", "planning"],
+      "repo_url": "https://github.com/marbatis/cutover-commander",
+      "target_url": "https://cutover-commander-0c9c18c24ac0.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "ai-security-gateway-demo",
+      "name": "AI Security Gateway Demo",
+      "category": "AI safety",
+      "description": "Backend AI security gateway demo showing RBAC, tool allowlisting, approvals, masking, and auditing.",
+      "tags": ["security", "rbac", "guardrails"],
+      "repo_url": "https://github.com/marbatis/ai-security-gateway-demo",
+      "target_url": "https://ai-security-gateway-demo-689fc4ee3d46.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "developer-friction-analyzer",
+      "name": "Developer Friction Analyzer",
+      "category": "Developer experience",
+      "description": "Finds recurring sources of developer friction and highlights deterministic remediation areas.",
+      "tags": ["dx", "analysis", "workflows"],
+      "repo_url": "https://github.com/marbatis/developer-friction-analyzer",
+      "target_url": "https://developer-friction-analyzer-092471de1be7.herokuapp.com/",
+      "enabled": true
+    },
+    {
+      "slug": "ops-superforecaster-lab",
+      "name": "Ops Superforecaster Lab",
+      "category": "Forecasting",
+      "description": "Operational forecasting lab for scenario scoring, confidence tracking, and decision support.",
+      "tags": ["forecasting", "ops", "decision-support"],
+      "repo_url": "https://github.com/marbatis/ops-superforecaster-lab",
+      "target_url": "https://ops-superforecaster-lab-4dd855389e24.herokuapp.com/",
+      "enabled": true
+    }
+  ]
+}
