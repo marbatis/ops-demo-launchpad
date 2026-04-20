@@ -328,6 +328,12 @@ def main() -> None:
         default=DEFAULT_FAMILY_OVERSAMPLE,
         help="Comma-separated family multipliers like `bit=4,equation=4,gravity=2`.",
     )
+    parser.add_argument(
+        "--load-mode",
+        choices=("auto", "qlora", "lora"),
+        default="auto",
+        help="Model loading mode. `auto` tries 4-bit QLoRA first and falls back to non-quantized LoRA.",
+    )
     args = parser.parse_args()
     apply_mode_defaults(args)
 
@@ -364,24 +370,54 @@ def main() -> None:
     )
     tokenized_dataset = build_tokenized_dataset(rows=training_rows, tokenizer=tokenizer, max_length=args.max_length)
 
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=compute_dtype,
-    )
-    try:
-        model = AutoModelForCausalLM.from_pretrained(
+    def load_quantized_model() -> Any:
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=compute_dtype,
+        )
+        return AutoModelForCausalLM.from_pretrained(
             resolved_base_model,
             quantization_config=quantization_config,
             device_map="auto",
             trust_remote_code=True,
         )
+
+    def load_dense_model() -> Any:
+        return AutoModelForCausalLM.from_pretrained(
+            resolved_base_model,
+            torch_dtype=compute_dtype,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+
+    load_mode = args.load_mode
+    load_error: str | None = None
+    try:
+        if args.load_mode == "qlora":
+            model = load_quantized_model()
+            load_mode = "qlora"
+        elif args.load_mode == "lora":
+            model = load_dense_model()
+            load_mode = "lora"
+        else:
+            try:
+                model = load_quantized_model()
+                load_mode = "qlora"
+            except Exception as exc:
+                if isinstance(exc, ImportError):
+                    maybe_raise_missing_mamba_dependency(exc)
+                load_error = repr(exc)
+                print(f"4-bit load failed, falling back to bf16/fp16 LoRA: {load_error}")
+                model = load_dense_model()
+                load_mode = "lora"
     except ImportError as exc:
         maybe_raise_missing_mamba_dependency(exc)
         raise
     model.config.use_cache = False
-    model = prepare_model_for_kbit_training(model)
+    if load_mode == "qlora":
+        model = prepare_model_for_kbit_training(model)
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
         model.enable_input_require_grads()
@@ -411,7 +447,7 @@ def main() -> None:
         bf16=(compute_dtype == torch.bfloat16),
         fp16=(compute_dtype == torch.float16),
         report_to="none",
-        optim="paged_adamw_8bit",
+        optim="paged_adamw_8bit" if load_mode == "qlora" else "adamw_torch",
         save_total_limit=1,
         remove_unused_columns=False,
         group_by_length=True,
@@ -437,6 +473,8 @@ def main() -> None:
     config, weight_path = validate_adapter_dir(args.output_dir, max_rank=32)
     print(f"saved_adapter_dir={args.output_dir}")
     print(f"mode={args.mode}")
+    print(f"load_mode={load_mode}")
+    print(f"load_error={load_error}")
     print(f"train_rows={len(training_rows)}")
     print(f"family_oversample={family_oversample}")
     print(f"dataset_family_counts={tokenized_dataset.to_pandas()['family'].value_counts().to_dict()}")
