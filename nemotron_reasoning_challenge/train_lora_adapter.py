@@ -3,78 +3,129 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import random
+import sys
 from pathlib import Path
 from typing import Any, Iterable, List
 
 import pandas as pd
 
-from nemotron_reasoning_challenge.package_adapter_submission import (
-    build_submission_zip,
-    validate_adapter_dir,
-)
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from nemotron_reasoning_challenge.package_adapter_submission import (
+        build_submission_zip,
+        validate_adapter_dir,
+    )
+else:
+    from .package_adapter_submission import build_submission_zip, validate_adapter_dir
 
-
-DEFAULT_TARGET_MODULES = (
-    "q_proj",
-    "k_proj",
-    "v_proj",
-    "o_proj",
-    "gate_proj",
-    "up_proj",
-    "down_proj",
-)
+DEFAULT_TARGET_MODULES = r".*\.(in_proj|out_proj|up_proj|down_proj)$"
+DEFAULT_FAMILY_OVERSAMPLE = "bit=4,equation=4,gravity=2,unit=2,cipher=1,roman=1,unknown=1"
 
 KAGGLE_PLACEHOLDER_BASE_MODEL = "/kaggle/input/REPLACE_ME_WITH_BASE_MODEL_PATH"
 KAGGLE_PLACEHOLDER_TRAIN_CSV = "/kaggle/input/nvidia-nemotron-model-reasoning-challenge/train.csv"
 
 
-def format_example(prompt: str, answer: str, eos_token: str) -> str:
+def render_prompt(prompt: str) -> str:
     return (
         "You are solving one reasoning task from the NVIDIA Nemotron benchmark.\n"
         "Read the full prompt carefully and answer with the final answer only.\n\n"
         f"Prompt:\n{prompt}\n\n"
-        f"Final answer:\n{answer}{eos_token}"
+        "Final answer:\n"
     )
 
 
-def load_training_texts(
+def detect_prompt_family(prompt: str) -> str:
+    prompt_lower = str(prompt).lower()
+    if "bit manipulation rule transforms 8-bit binary numbers" in prompt_lower:
+        return "bit"
+    if "gravitational constant has been secretly changed" in prompt_lower:
+        return "gravity"
+    if "secret unit conversion is applied to measurements" in prompt_lower:
+        return "unit"
+    if "secret encryption rules are used on text" in prompt_lower:
+        return "cipher"
+    if "different numeral system" in prompt_lower:
+        return "roman"
+    if "secret set of transformation rules is applied to equations" in prompt_lower:
+        return "equation"
+    return "unknown"
+
+
+def parse_family_oversample(raw: str) -> dict[str, int]:
+    weights: dict[str, int] = {}
+    if not raw.strip():
+        return weights
+    for chunk in raw.split(","):
+        family, _, value = chunk.partition("=")
+        family = family.strip()
+        value = value.strip()
+        if not family or not value:
+            continue
+        weights[family] = max(1, int(value))
+    return weights
+
+
+def load_training_rows(
     train_csv: Path,
-    eos_token: str,
     subset_size: int | None,
     seed: int,
-) -> List[str]:
+    family_oversample: dict[str, int],
+) -> list[dict[str, str]]:
     df = pd.read_csv(train_csv)
+    df["family"] = df["prompt"].map(detect_prompt_family)
     if subset_size is not None and subset_size < len(df):
         df = df.sample(n=subset_size, random_state=seed).reset_index(drop=True)
-    return [
-        format_example(prompt=str(row.prompt), answer=str(row.answer), eos_token=eos_token)
-        for row in df.itertuples(index=False)
-    ]
+
+    rows: list[dict[str, str]] = []
+    for row in df.itertuples(index=False):
+        prompt = str(row.prompt)
+        answer = str(row.answer)
+        family = str(row.family)
+        repeat = family_oversample.get(family, 1)
+        for _ in range(repeat):
+            rows.append({"prompt": prompt, "answer": answer, "family": family})
+    return rows
 
 
 def build_tokenized_dataset(
-    texts: Iterable[str],
+    rows: Iterable[dict[str, str]],
     tokenizer: Any,
     max_length: int,
 ) -> Any:
     from datasets import Dataset
 
-    dataset = Dataset.from_dict({"text": list(texts)})
+    eos_token = tokenizer.eos_token or ""
+    encoded_rows: list[dict[str, list[int] | str]] = []
+    for row in rows:
+        prompt_text = render_prompt(row["prompt"])
+        answer_text = f"{row['answer']}{eos_token}"
+        prompt_ids = tokenizer(prompt_text, add_special_tokens=False).input_ids
+        answer_ids = tokenizer(answer_text, add_special_tokens=False).input_ids
 
-    def tokenize_batch(batch: dict) -> dict:
-        return tokenizer(
-            batch["text"],
-            truncation=True,
-            max_length=max_length,
-            padding=False,
+        if not answer_ids:
+            continue
+        if len(answer_ids) >= max_length:
+            answer_ids = answer_ids[:max_length]
+        prompt_budget = max(0, max_length - len(answer_ids))
+        prompt_ids = prompt_ids[:prompt_budget]
+
+        input_ids = prompt_ids + answer_ids
+        encoded_rows.append(
+            {
+                "input_ids": input_ids,
+                "attention_mask": [1] * len(input_ids),
+                "labels": ([-100] * len(prompt_ids)) + answer_ids,
+                "family": row["family"],
+            }
         )
 
-    tokenized = dataset.map(tokenize_batch, batched=True, remove_columns=["text"])
-    return tokenized
+    return Dataset.from_list(encoded_rows)
 
 
-def parse_target_modules(raw: str) -> List[str]:
-    return [module.strip() for module in raw.split(",") if module.strip()]
+def parse_target_modules(raw: str) -> List[str] | str:
+    if "," in raw:
+        return [module.strip() for module in raw.split(",") if module.strip()]
+    return raw.strip()
 
 
 def detect_compute_dtype() -> Any:
@@ -221,7 +272,7 @@ def apply_mode_defaults(args: argparse.Namespace) -> None:
             args.subset_size = 256
         if args.max_steps is None:
             args.max_steps = 20
-        if args.max_length == 768:
+        if args.max_length == 1024:
             args.max_length = 512
         if args.gradient_accumulation_steps == 16:
             args.gradient_accumulation_steps = 8
@@ -233,6 +284,8 @@ def apply_mode_defaults(args: argparse.Namespace) -> None:
             args.lora_r = 8
         if args.lora_alpha == 32:
             args.lora_alpha = 16
+        if args.family_oversample == DEFAULT_FAMILY_OVERSAMPLE:
+            args.family_oversample = "bit=2,equation=2,gravity=1,unit=1,cipher=1,roman=1,unknown=1"
     else:
         if args.max_steps is None:
             args.max_steps = -1
@@ -247,7 +300,7 @@ def main() -> None:
     parser.add_argument("--mode", choices=("smoke", "full"), default="smoke")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--subset-size", type=int, default=None)
-    parser.add_argument("--max-length", type=int, default=768)
+    parser.add_argument("--max-length", type=int, default=1024)
     parser.add_argument("--micro-batch-size", type=int, default=1)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=16)
     parser.add_argument("--max-steps", type=int, default=None)
@@ -266,8 +319,14 @@ def main() -> None:
     parser.add_argument(
         "--target-modules",
         type=str,
-        default=",".join(DEFAULT_TARGET_MODULES),
-        help="Comma-separated list of module names for LoRA injection.",
+        default=DEFAULT_TARGET_MODULES,
+        help="Comma-separated module list or a PEFT regex for LoRA injection.",
+    )
+    parser.add_argument(
+        "--family-oversample",
+        type=str,
+        default=DEFAULT_FAMILY_OVERSAMPLE,
+        help="Comma-separated family multipliers like `bit=4,equation=4,gravity=2`.",
     )
     args = parser.parse_args()
     apply_mode_defaults(args)
@@ -278,7 +337,7 @@ def main() -> None:
         AutoModelForCausalLM,
         AutoTokenizer,
         BitsAndBytesConfig,
-        DataCollatorForLanguageModeling,
+        DataCollatorForSeq2Seq,
         Trainer,
         TrainingArguments,
     )
@@ -296,13 +355,14 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    texts = load_training_texts(
+    family_oversample = parse_family_oversample(args.family_oversample)
+    training_rows = load_training_rows(
         resolved_train_csv,
-        eos_token=tokenizer.eos_token or "",
         subset_size=args.subset_size,
         seed=args.seed,
+        family_oversample=family_oversample,
     )
-    tokenized_dataset = build_tokenized_dataset(texts=texts, tokenizer=tokenizer, max_length=args.max_length)
+    tokenized_dataset = build_tokenized_dataset(rows=training_rows, tokenizer=tokenizer, max_length=args.max_length)
 
     quantization_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -324,6 +384,7 @@ def main() -> None:
     model = prepare_model_for_kbit_training(model)
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
+        model.enable_input_require_grads()
 
     lora_config = LoraConfig(
         r=args.lora_r,
@@ -361,10 +422,10 @@ def main() -> None:
         model=model,
         args=training_args,
         train_dataset=tokenized_dataset,
-        data_collator=DataCollatorForLanguageModeling(
+        data_collator=DataCollatorForSeq2Seq(
             tokenizer=tokenizer,
-            mlm=False,
             pad_to_multiple_of=8,
+            return_tensors="pt",
         ),
     )
     trainer.train()
@@ -376,7 +437,9 @@ def main() -> None:
     config, weight_path = validate_adapter_dir(args.output_dir, max_rank=32)
     print(f"saved_adapter_dir={args.output_dir}")
     print(f"mode={args.mode}")
-    print(f"train_rows={len(texts)}")
+    print(f"train_rows={len(training_rows)}")
+    print(f"family_oversample={family_oversample}")
+    print(f"dataset_family_counts={tokenized_dataset.to_pandas()['family'].value_counts().to_dict()}")
     print(f"resolved_base_model={resolved_base_model}")
     print(f"resolved_train_csv={resolved_train_csv}")
     print(f"peft_type={config.get('peft_type')}")

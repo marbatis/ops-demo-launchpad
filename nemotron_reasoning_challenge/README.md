@@ -167,9 +167,33 @@ Starter notebook artifact:
 
 Recommended training flow:
 
-1. Run `train_lora_adapter.py` or the notebook in `smoke` mode first.
+1. Run the trainer or notebook in `smoke` mode first.
 2. Verify the adapter saves cleanly and `submission.zip` contains `adapter_config.json` at the zip root.
 3. Switch to `full` mode only after the smoke run succeeds.
+
+Recommended CLI entrypoint:
+
+```bash
+python3 -m nemotron_reasoning_challenge.train_lora_adapter \
+  --mode smoke \
+  --train-csv '/kaggle/input/nvidia-nemotron-model-reasoning-challenge/train.csv' \
+  --base-model '/kaggle/input/ashok205-nvidia-nemotron-3-nano-30b/pytorch/default/2' \
+  --output-dir '/kaggle/working/nemotron_adapter' \
+  --submission-zip '/kaggle/working/submission.zip'
+```
+
+Current recommended training defaults:
+
+- answer-only supervision: prompt tokens are masked out of the loss, so training pressure is spent on the target answer instead of prompt copying
+- family-weighted sampling: default oversampling is `bit=4,equation=4,gravity=2,unit=2,cipher=1,roman=1,unknown=1`
+- smoke mode keeps the same objective but reduces scope and weights for quick validation
+- default LoRA target modules now use the broader demo-style regex `.*\\.(in_proj|out_proj|up_proj|down_proj)$`
+
+Useful override:
+
+```bash
+--family-oversample 'bit=6,equation=6,gravity=2,unit=2,cipher=1,roman=1,unknown=1'
+```
 
 ## Experiment Loop
 
