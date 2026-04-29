@@ -185,6 +185,9 @@ def find_train_csv_candidates(root: Path = Path("/kaggle/input")) -> List[Path]:
 
 
 def resolve_base_model_path(raw: str) -> str:
+    if not raw.strip():
+        raise ValueError("--base-model is empty. Set BASE_MODEL to the Nemotron base model directory.")
+
     candidate = Path(raw)
     if candidate.exists():
         return str(candidate)
