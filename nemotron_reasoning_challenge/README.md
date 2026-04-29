@@ -232,6 +232,17 @@ Colab recovery overrides:
 
 `--warmup-steps` avoids the deprecated `TrainingArguments.warmup_ratio` field while preserving the same schedule when using a fixed `--max-steps` run.
 
+Adapter-only continuation:
+
+```bash
+--init-adapter-dir '/content/drive/MyDrive/nemotron_runs/solver_distill_trace_only_1000_lr3e5/checkpoints/checkpoint-600'
+--max-steps 400
+--learning-rate 1e-5
+--warmup-steps 0
+```
+
+Use `--init-adapter-dir` when the saved Drive artifact contains adapter weights but not full Trainer optimizer/scheduler state. In that mode `--max-steps 400` means 400 additional optimizer steps from the initialized adapter weights.
+
 ## Experiment Loop
 
 Use the loop runner to evaluate any new iteration against the fixed holdout and the current stable baseline:

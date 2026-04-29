@@ -360,6 +360,12 @@ def main() -> None:
     parser.add_argument("--base-model", type=str, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--submission-zip", type=Path, default=None)
+    parser.add_argument(
+        "--init-adapter-dir",
+        type=Path,
+        default=None,
+        help="Optional existing PEFT adapter directory to initialize trainable LoRA weights from.",
+    )
     parser.add_argument("--emit-manifest", type=Path, default=None, help="Optional path to write a run manifest JSON.")
     parser.add_argument("--sync-adapter", action="store_true", help="Sync adapter artifacts via nemotron_sync_adapter_dataset.py.")
     parser.add_argument(
@@ -418,7 +424,7 @@ def main() -> None:
     apply_mode_defaults(args)
 
     import torch
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
     from transformers import (
         AutoModelForCausalLM,
         AutoTokenizer,
@@ -502,15 +508,19 @@ def main() -> None:
         model.gradient_checkpointing_enable()
         model.enable_input_require_grads()
 
-    lora_config = LoraConfig(
-        r=args.lora_r,
-        lora_alpha=args.lora_alpha,
-        lora_dropout=args.lora_dropout,
-        bias="none",
-        task_type="CAUSAL_LM",
-        target_modules=parse_target_modules(args.target_modules),
-    )
-    model = get_peft_model(model, lora_config)
+    if args.init_adapter_dir is not None:
+        validate_adapter_dir(args.init_adapter_dir, max_rank=32)
+        model = PeftModel.from_pretrained(model, args.init_adapter_dir, is_trainable=True)
+    else:
+        lora_config = LoraConfig(
+            r=args.lora_r,
+            lora_alpha=args.lora_alpha,
+            lora_dropout=args.lora_dropout,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=parse_target_modules(args.target_modules),
+        )
+        model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
     warmup_steps = resolve_warmup_steps(
         explicit_warmup_steps=args.warmup_steps,
@@ -565,6 +575,7 @@ def main() -> None:
     print(f"mode={args.mode}")
     print(f"load_mode={load_mode}")
     print(f"load_error={load_error}")
+    print(f"init_adapter_dir={args.init_adapter_dir}")
     print(f"warmup_steps={warmup_steps}")
     print(f"resume_from_checkpoint={resume_from_checkpoint}")
     print(f"train_rows={len(training_rows)}")
@@ -594,6 +605,7 @@ def main() -> None:
         "resolved_base_model": resolved_base_model,
         "resolved_train_csv": str(resolved_train_csv),
         "adapter_dir": str(args.output_dir),
+        "init_adapter_dir": str(args.init_adapter_dir) if args.init_adapter_dir is not None else None,
         "submission_zip": str(args.submission_zip) if args.submission_zip is not None else None,
         "submission_files": packaged_files,
     }
