@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import json
+import math
 import random
+import re
+import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, List
 
@@ -20,6 +25,7 @@ else:
 
 DEFAULT_TARGET_MODULES = r".*\.(in_proj|out_proj|up_proj|down_proj)$"
 DEFAULT_FAMILY_OVERSAMPLE = "bit=4,equation=4,gravity=2,unit=2,cipher=1,roman=1,unknown=1"
+SYNC_BACKUP_TARGET_RE = re.compile(r"[a-zA-Z0-9][\w.-]*/[a-zA-Z0-9][\w.-]*")
 
 KAGGLE_PLACEHOLDER_BASE_MODEL = "/kaggle/input/REPLACE_ME_WITH_BASE_MODEL_PATH"
 KAGGLE_PLACEHOLDER_TRAIN_CSV = "/kaggle/input/nvidia-nemotron-model-reasoning-challenge/train.csv"
@@ -291,12 +297,79 @@ def apply_mode_defaults(args: argparse.Namespace) -> None:
             args.max_steps = -1
 
 
+def resolve_warmup_steps(
+    explicit_warmup_steps: int | None,
+    warmup_ratio: float,
+    train_size: int,
+    micro_batch_size: int,
+    gradient_accumulation_steps: int,
+    max_steps: int,
+    num_train_epochs: float,
+) -> int:
+    if explicit_warmup_steps is not None:
+        return max(0, explicit_warmup_steps)
+    if warmup_ratio <= 0:
+        return 0
+
+    if max_steps > 0:
+        total_steps = max_steps
+    else:
+        effective_batch_size = max(1, micro_batch_size * gradient_accumulation_steps)
+        steps_per_epoch = max(1, math.ceil(train_size / effective_batch_size))
+        total_steps = max(1, math.ceil(steps_per_epoch * num_train_epochs))
+
+    return max(0, math.ceil(total_steps * warmup_ratio))
+
+
+def resolve_resume_checkpoint(output_dir: Path, raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    if raw.lower() != "auto":
+        return raw
+
+    trainer_state_dir = output_dir / "trainer_state"
+    checkpoints: list[tuple[int, Path]] = []
+    for path in trainer_state_dir.glob("checkpoint-*"):
+        if not path.is_dir():
+            continue
+        _, _, suffix = path.name.partition("-")
+        if suffix.isdigit():
+            checkpoints.append((int(suffix), path))
+    if not checkpoints:
+        return None
+    return str(max(checkpoints, key=lambda item: item[0])[1])
+
+
+def validate_sync_adapter_request(submission_zip: Path | None, backup_target: str, sync_script: Path) -> str:
+    if submission_zip is None:
+        raise ValueError("--sync-adapter requires --submission-zip so the package step completes first.")
+
+    normalized_target = backup_target.strip()
+    if not normalized_target:
+        raise ValueError("--sync-adapter requires --sync-backup-target.")
+    if not SYNC_BACKUP_TARGET_RE.fullmatch(normalized_target):
+        raise ValueError("--sync-backup-target must be a dataset-style target like 'owner/dataset-slug'.")
+    if not sync_script.exists():
+        raise FileNotFoundError(f"Sync script not found: {sync_script}")
+    return normalized_target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fine-tune a Nemotron PEFT adapter on the local train.csv benchmark.")
     parser.add_argument("--train-csv", type=Path, required=True)
     parser.add_argument("--base-model", type=str, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--submission-zip", type=Path, default=None)
+    parser.add_argument("--emit-manifest", type=Path, default=None, help="Optional path to write a run manifest JSON.")
+    parser.add_argument("--sync-adapter", action="store_true", help="Sync adapter artifacts via nemotron_sync_adapter_dataset.py.")
+    parser.add_argument(
+        "--sync-script",
+        type=Path,
+        default=Path("scripts/nemotron_sync_adapter_dataset.py"),
+        help="Path to sync helper script.",
+    )
+    parser.add_argument("--sync-backup-target", type=str, default="", help="Durable backup target label (e.g. Kaggle dataset id).")
+    parser.add_argument("--sync-title", type=str, default=None, help="Optional dataset title passed to sync script.")
     parser.add_argument("--mode", choices=("smoke", "full"), default="smoke")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--subset-size", type=int, default=None)
@@ -307,6 +380,7 @@ def main() -> None:
     parser.add_argument("--learning-rate", type=float, default=2e-4)
     parser.add_argument("--num-train-epochs", type=float, default=1.0)
     parser.add_argument("--warmup-ratio", type=float, default=0.03)
+    parser.add_argument("--warmup-steps", type=int, default=None)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--logging-steps", type=int, default=10)
     parser.add_argument("--save-steps", type=int, default=100)
@@ -316,6 +390,12 @@ def main() -> None:
     parser.add_argument("--gradient-checkpointing", dest="gradient_checkpointing", action="store_true")
     parser.add_argument("--no-gradient-checkpointing", dest="gradient_checkpointing", action="store_false")
     parser.set_defaults(gradient_checkpointing=True)
+    parser.add_argument(
+        "--resume-from-checkpoint",
+        type=str,
+        default=None,
+        help="Checkpoint path to resume from, or `auto` to use the latest checkpoint under output-dir/trainer_state.",
+    )
     parser.add_argument(
         "--target-modules",
         type=str,
@@ -432,6 +512,16 @@ def main() -> None:
     )
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
+    warmup_steps = resolve_warmup_steps(
+        explicit_warmup_steps=args.warmup_steps,
+        warmup_ratio=args.warmup_ratio,
+        train_size=len(tokenized_dataset),
+        micro_batch_size=args.micro_batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        max_steps=args.max_steps,
+        num_train_epochs=args.num_train_epochs,
+    )
+    resume_from_checkpoint = resolve_resume_checkpoint(args.output_dir, args.resume_from_checkpoint)
 
     training_args = TrainingArguments(
         output_dir=str(args.output_dir / "trainer_state"),
@@ -440,7 +530,7 @@ def main() -> None:
         max_steps=args.max_steps,
         learning_rate=args.learning_rate,
         num_train_epochs=args.num_train_epochs,
-        warmup_ratio=args.warmup_ratio,
+        warmup_steps=warmup_steps,
         weight_decay=args.weight_decay,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
@@ -464,7 +554,7 @@ def main() -> None:
             return_tensors="pt",
         ),
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(args.output_dir, safe_serialization=True)
@@ -475,6 +565,8 @@ def main() -> None:
     print(f"mode={args.mode}")
     print(f"load_mode={load_mode}")
     print(f"load_error={load_error}")
+    print(f"warmup_steps={warmup_steps}")
+    print(f"resume_from_checkpoint={resume_from_checkpoint}")
     print(f"train_rows={len(training_rows)}")
     print(f"family_oversample={family_oversample}")
     print(f"dataset_family_counts={tokenized_dataset.to_pandas()['family'].value_counts().to_dict()}")
@@ -484,10 +576,46 @@ def main() -> None:
     print(f"base_model_name_or_path={config.get('base_model_name_or_path')}")
     print(f"weight_file={weight_path.name}")
 
+    packaged_files: list[str] | None = None
     if args.submission_zip is not None:
         files = build_submission_zip(args.output_dir, args.submission_zip)
+        packaged_files = files
         print(f"submission_zip={args.submission_zip}")
         print(f"submission_files={files}")
+
+    manifest_data = {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "mode": args.mode,
+        "load_mode": load_mode,
+        "load_error": load_error,
+        "train_rows": len(training_rows),
+        "family_oversample": family_oversample,
+        "dataset_family_counts": tokenized_dataset.to_pandas()["family"].value_counts().to_dict(),
+        "resolved_base_model": resolved_base_model,
+        "resolved_train_csv": str(resolved_train_csv),
+        "adapter_dir": str(args.output_dir),
+        "submission_zip": str(args.submission_zip) if args.submission_zip is not None else None,
+        "submission_files": packaged_files,
+    }
+    if args.emit_manifest is not None:
+        args.emit_manifest.parent.mkdir(parents=True, exist_ok=True)
+        args.emit_manifest.write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
+        print(f"manifest_json={args.emit_manifest}")
+
+    if args.sync_adapter:
+        backup_target = validate_sync_adapter_request(args.submission_zip, args.sync_backup_target, args.sync_script)
+        sync_cmd = [
+            sys.executable,
+            str(args.sync_script),
+            "--adapter-dir",
+            str(args.output_dir),
+            "--dataset-id",
+            backup_target,
+        ]
+        if args.sync_title:
+            sync_cmd.extend(["--title", args.sync_title])
+        print(f"sync_command={' '.join(sync_cmd)}")
+        subprocess.run(sync_cmd, check=True)
 
 
 if __name__ == "__main__":

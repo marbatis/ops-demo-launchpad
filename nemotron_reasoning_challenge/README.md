@@ -179,7 +179,35 @@ python3 -m nemotron_reasoning_challenge.train_lora_adapter \
   --train-csv '/kaggle/input/nvidia-nemotron-model-reasoning-challenge/train.csv' \
   --base-model '/kaggle/input/ashok205-nvidia-nemotron-3-nano-30b/pytorch/default/2' \
   --output-dir '/kaggle/working/nemotron_adapter' \
-  --submission-zip '/kaggle/working/submission.zip'
+  --submission-zip '/kaggle/working/submission.zip' \
+  --emit-manifest '/kaggle/working/nemotron_run_manifest.json'
+```
+
+### Colab recovery workflow (manifest + durable adapter sync)
+
+Default behavior is unchanged: if you do not pass any new flags, training/package runs exactly as before.
+
+For recovery-friendly Colab/Kaggle runs, opt in to:
+
+- `--emit-manifest` to write a JSON manifest with exact output paths and run metadata.
+- `--sync-adapter` to push the packaged adapter directory through `scripts/nemotron_sync_adapter_dataset.py`.
+- `--sync-adapter` requires `--submission-zip` so sync only runs after a successful package step.
+- `--sync-backup-target` as the required durable target identifier (validated before sync; expected format: `owner/dataset-slug`).
+
+Exact command:
+
+```bash
+python3 -m nemotron_reasoning_challenge.train_lora_adapter \
+  --mode smoke \
+  --train-csv '/kaggle/input/nvidia-nemotron-model-reasoning-challenge/train.csv' \
+  --base-model '/kaggle/input/ashok205-nvidia-nemotron-3-nano-30b/pytorch/default/2' \
+  --output-dir '/kaggle/working/nemotron_adapter' \
+  --submission-zip '/kaggle/working/submission.zip' \
+  --emit-manifest '/kaggle/working/nemotron_run_manifest.json' \
+  --sync-adapter \
+  --sync-script '/kaggle/working/scripts/nemotron_sync_adapter_dataset.py' \
+  --sync-backup-target 'marcsilveira/nemotron-adapter-artifacts' \
+  --sync-title 'Nemotron Adapter Artifacts'
 ```
 
 Current recommended training defaults:
@@ -194,6 +222,15 @@ Useful override:
 ```bash
 --family-oversample 'bit=6,equation=6,gravity=2,unit=2,cipher=1,roman=1,unknown=1'
 ```
+
+Colab recovery overrides:
+
+```bash
+--resume-from-checkpoint auto
+--warmup-steps 30
+```
+
+`--warmup-steps` avoids the deprecated `TrainingArguments.warmup_ratio` field while preserving the same schedule when using a fixed `--max-steps` run.
 
 ## Experiment Loop
 
