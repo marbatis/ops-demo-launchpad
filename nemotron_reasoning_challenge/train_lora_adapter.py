@@ -437,6 +437,7 @@ def main() -> None:
     parser.add_argument("--warmup-ratio", type=float, default=0.03)
     parser.add_argument("--warmup-steps", type=int, default=None)
     parser.add_argument("--weight-decay", type=float, default=0.0)
+    parser.add_argument("--optim", type=str, default=None, help="TrainingArguments optimizer override.")
     parser.add_argument("--logging-steps", type=int, default=10)
     parser.add_argument("--save-steps", type=int, default=100)
     parser.add_argument("--lora-r", type=int, default=16)
@@ -598,7 +599,7 @@ def main() -> None:
         bf16=(compute_dtype == torch.bfloat16),
         fp16=(compute_dtype == torch.float16),
         report_to="none",
-        optim="paged_adamw_8bit" if load_mode == "qlora" else "adamw_torch",
+        optim=args.optim or ("paged_adamw_8bit" if load_mode == "qlora" else "adamw_torch"),
         save_total_limit=1,
         remove_unused_columns=False,
         group_by_length=True,
@@ -629,6 +630,7 @@ def main() -> None:
     print(f"patched_nemotron_init={patched_nemotron_init}")
     print(f"init_adapter_dir={args.init_adapter_dir}")
     print(f"warmup_steps={warmup_steps}")
+    print(f"optim={args.optim or ('paged_adamw_8bit' if load_mode == 'qlora' else 'adamw_torch')}")
     print(f"resume_from_checkpoint={resume_from_checkpoint}")
     print(f"train_rows={len(training_rows)}")
     print(f"family_oversample={family_oversample}")
@@ -652,6 +654,7 @@ def main() -> None:
         "load_mode": load_mode,
         "load_error": load_error,
         "patched_nemotron_init": patched_nemotron_init,
+        "optim": args.optim or ("paged_adamw_8bit" if load_mode == "qlora" else "adamw_torch"),
         "train_rows": len(training_rows),
         "family_oversample": family_oversample,
         "dataset_family_counts": tokenized_dataset.to_pandas()["family"].value_counts().to_dict(),
