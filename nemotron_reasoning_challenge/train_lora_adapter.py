@@ -505,6 +505,7 @@ def main() -> None:
         family_oversample=family_oversample,
     )
     tokenized_dataset = build_tokenized_dataset(rows=training_rows, tokenizer=tokenizer, max_length=args.max_length)
+    train_dataset = tokenized_dataset.remove_columns(["family"]) if "family" in tokenized_dataset.column_names else tokenized_dataset
 
     def load_quantized_model() -> Any:
         quantization_config = BitsAndBytesConfig(
@@ -607,7 +608,7 @@ def main() -> None:
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=tokenized_dataset,
+        train_dataset=train_dataset,
         data_collator=DataCollatorForSeq2Seq(
             tokenizer=tokenizer,
             pad_to_multiple_of=8,
