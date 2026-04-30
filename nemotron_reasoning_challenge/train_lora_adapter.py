@@ -247,40 +247,39 @@ def patch_nemotron_init_weights(model_dir: str) -> bool:
     if cache_root.exists():
         candidates.extend(cache_root.rglob("modeling_nemotron_h.py"))
 
-    bad_guard_re = re.compile(
-        r"(?m)^(?P<indent>[ \t]*)if p\.is_floating_point\(\):\n(?P=indent)p /= math\.sqrt\(self\.config\.num_hidden_layers\)"
-    )
-    unguarded_re = re.compile(
-        r"(?m)^(?P<indent>[ \t]*)p /= math\.sqrt\(self\.config\.num_hidden_layers\)"
-    )
-    good_guard_re = re.compile(
-        r"(?m)^(?P<indent>[ \t]*)if p\.is_floating_point\(\):\n(?P=indent)[ \t]+p /= math\.sqrt\(self\.config\.num_hidden_layers\)"
-    )
+    target = "p /= math.sqrt(self.config.num_hidden_layers)"
     for path in candidates:
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")
-        if good_guard_re.search(text):
-            patched = True
+        lines = text.splitlines()
+        fixed_lines: list[str] = []
+        changed = False
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() != target:
+                fixed_lines.append(line)
+                index += 1
+                continue
+
+            guard_lines: list[str] = []
+            while fixed_lines and fixed_lines[-1].strip() == "if p.is_floating_point():":
+                guard_lines.append(fixed_lines.pop())
+
+            if guard_lines:
+                base_indent = re.match(r"^[ \t]*", guard_lines[-1]).group(0)
+            else:
+                base_indent = re.match(r"^[ \t]*", line).group(0)
+            fixed_lines.append(f"{base_indent}if p.is_floating_point():")
+            fixed_lines.append(f"{base_indent}    {target}")
+            changed = True
+            index += 1
+
+        if not changed:
             continue
-        fixed = bad_guard_re.sub(
-            lambda match: (
-                f"{match.group('indent')}if p.is_floating_point():\n"
-                f"{match.group('indent')}    p /= math.sqrt(self.config.num_hidden_layers)"
-            ),
-            text,
-        )
-        if fixed == text:
-            fixed = unguarded_re.sub(
-                lambda match: (
-                    f"{match.group('indent')}if p.is_floating_point():\n"
-                    f"{match.group('indent')}    p /= math.sqrt(self.config.num_hidden_layers)"
-                ),
-                text,
-            )
-        if fixed == text:
-            continue
-        path.write_text(fixed, encoding="utf-8")
+        trailing_newline = "\n" if text.endswith("\n") else ""
+        path.write_text("\n".join(fixed_lines) + trailing_newline, encoding="utf-8")
         print(f"patched_nemotron_init_weights={path}")
         patched = True
     return patched
