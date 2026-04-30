@@ -239,6 +239,34 @@ def resolve_train_csv_path(raw: Path) -> Path:
     return raw
 
 
+def patch_nemotron_init_weights(model_dir: str) -> bool:
+    """Avoid bitsandbytes byte-tensor init failures in Nemotron remote code."""
+    patched = False
+    candidates = [Path(model_dir) / "modeling_nemotron_h.py"]
+    cache_root = Path.home() / ".cache" / "huggingface" / "modules" / "transformers_modules"
+    if cache_root.exists():
+        candidates.extend(cache_root.rglob("modeling_nemotron_h.py"))
+
+    old = "p /= math.sqrt(self.config.num_hidden_layers)"
+    new = (
+        "if p.is_floating_point():\n"
+        "                    p /= math.sqrt(self.config.num_hidden_layers)"
+    )
+    for path in candidates:
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if new in text:
+            patched = True
+            continue
+        if old not in text:
+            continue
+        path.write_text(text.replace(old, new), encoding="utf-8")
+        print(f"patched_nemotron_init_weights={path}")
+        patched = True
+    return patched
+
+
 def check_runtime_compatibility() -> None:
     import torch
 
@@ -445,6 +473,7 @@ def main() -> None:
     check_runtime_compatibility()
     resolved_base_model = resolve_base_model_path(args.base_model)
     resolved_train_csv = resolve_train_csv_path(args.train_csv)
+    patched_nemotron_init = patch_nemotron_init_weights(resolved_base_model)
     compute_dtype = detect_compute_dtype()
     tokenizer = AutoTokenizer.from_pretrained(resolved_base_model, trust_remote_code=True)
     if tokenizer.pad_token is None:
@@ -578,6 +607,7 @@ def main() -> None:
     print(f"mode={args.mode}")
     print(f"load_mode={load_mode}")
     print(f"load_error={load_error}")
+    print(f"patched_nemotron_init={patched_nemotron_init}")
     print(f"init_adapter_dir={args.init_adapter_dir}")
     print(f"warmup_steps={warmup_steps}")
     print(f"resume_from_checkpoint={resume_from_checkpoint}")
@@ -602,6 +632,7 @@ def main() -> None:
         "mode": args.mode,
         "load_mode": load_mode,
         "load_error": load_error,
+        "patched_nemotron_init": patched_nemotron_init,
         "train_rows": len(training_rows),
         "family_oversample": family_oversample,
         "dataset_family_counts": tokenized_dataset.to_pandas()["family"].value_counts().to_dict(),
