@@ -2,8 +2,6 @@ name: Weekly Security Audit
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 13 * * 1"
 
 permissions:
   contents: read
