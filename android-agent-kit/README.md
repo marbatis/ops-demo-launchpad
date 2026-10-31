@@ -51,3 +51,8 @@ the task.
 - Auto-captions in the transcript mangle names: "Cloud" = Claude, "Kelly" = CLI, "A tui" = A2UI,
   "Quinn/Kimmy" = Qwen/Kimi.
 - Re-check status of each item every few months and update `docs/00-adsummit-2026-reference.md`.
+
+
+## Claude Code cloud sessions
+
+See [cloud setup](cloud/README.md) for the portable account skill, registered subagents, tested Android build environment, and fresh-session verification. The cloud integration includes adoption notes that qualify the presentation examples and preserves existing project stacks.
