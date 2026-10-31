@@ -1,0 +1,16 @@
+{
+  "name": "marbatis-tools",
+  "owner": {
+    "name": "Marcelo Silveira"
+  },
+  "metadata": {
+    "description": "Marcelo's Claude Code plugins, starting with the Android AI app development kit."
+  },
+  "plugins": [
+    {
+      "name": "android-ai-kit",
+      "source": "./android-agent-kit",
+      "description": "Android AI app playbook and subagents distilled from the Android Dev Summit 2026 keynote."
+    }
+  ]
+}
