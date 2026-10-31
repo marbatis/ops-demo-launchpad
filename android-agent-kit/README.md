@@ -23,21 +23,36 @@ its full transcript, and Google's follow-up developer blog posts. Timestamps in 
 | [`templates/.claude/agents/android-leak-hunter.md`](templates/.claude/agents/android-leak-hunter.md) | Subagent that runs journeys, finds and fixes memory leaks. | Copy to `.claude/agents/`. |
 | [`templates/.claude/agents/android-adaptive-reviewer.md`](templates/.claude/agents/android-adaptive-reviewer.md) | Subagent that makes/validates adaptive + desktop layouts. | Copy to `.claude/agents/`. |
 
-## How to use it in a new Android project
+## How to get it into every project
 
-```bash
-KIT=path/to/ops-demo-launchpad/android-agent-kit
-cd my-new-android-app
-cp $KIT/AGENTS.md ./AGENTS.md
-cp $KIT/AGENTS.md ./CLAUDE.md            # Claude Code reads CLAUDE.md
-mkdir -p docs/agent .claude/agents
-cp $KIT/docs/*.md docs/agent/
-cp $KIT/templates/journeys.md docs/journeys.md
-cp $KIT/templates/.claude/agents/*.md .claude/agents/
+There are three ways, and they combine:
+
+### 1. New app: start from the template repo
+Create the repo from **marbatis/android-ai-starter** ("Use this template" on GitHub), then create the Android
+project in that folder with Android Studio (Empty Activity, Compose). The kit files are already in place.
+
+### 2. Claude Code plugin: available in every project, every session
 ```
+/plugin install android-ai-kit --marketplace marbatis/ops-demo-launchpad
+```
+This gives Claude Code, in any project:
+- the `android-ai-dev` skill, which loads this playbook automatically when doing Android work
+- the `android-release-validator`, `android-leak-hunter` and `android-adaptive-reviewer` subagents
+- `/android-ai-kit:setup-android-project`, which installs the kit files into the current project
 
-`AGENTS.md` references the `docs/agent/*.md` files by path, so agents load the deep docs on demand rather
-than all at once (saves tokens).
+Update later with `/plugin marketplace update marbatis-tools`.
+
+### 3. Any existing project, any agent: the installer
+```bash
+bash path/to/ops-demo-launchpad/android-agent-kit/install.sh path/to/my-android-app
+```
+It writes `AGENTS.md`, `docs/agent/*.md`, `.claude/agents/*.md`, seeds `docs/journeys.md`, and adds an
+`@AGENTS.md` import to `CLAUDE.md`. It skips files that already exist; `--force` updates kit-owned files but
+never overwrites your `docs/journeys.md`.
+
+`AGENTS.md` is read by Codex, Antigravity and agents in Android Studio; Claude Code reads it via the
+`CLAUDE.md` import. It references the `docs/agent/*.md` files by path, so agents load the deep docs on demand
+rather than all at once (saves tokens).
 
 For tools that take a single context file (e.g. a chat UI), paste `AGENTS.md` first, then the specific doc for
 the task.

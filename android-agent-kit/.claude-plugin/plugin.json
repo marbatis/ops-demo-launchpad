@@ -1,0 +1,15 @@
+{
+  "name": "android-ai-kit",
+  "version": "1.0.0",
+  "description": "Android Dev Summit 2026 playbook for AI coding agents: Compose-first architecture, Android CLI workflow, AppFunctions/Gemini Nano/A2UI, adaptive and XR, release checklist, plus release-validator, leak-hunter and adaptive-reviewer subagents.",
+  "author": {
+    "name": "Marcelo Silveira"
+  },
+  "repository": "https://github.com/marbatis/ops-demo-launchpad",
+  "keywords": ["android", "compose", "agents", "gemini-nano", "appfunctions"],
+  "agents": [
+    "./templates/.claude/agents/android-release-validator.md",
+    "./templates/.claude/agents/android-leak-hunter.md",
+    "./templates/.claude/agents/android-adaptive-reviewer.md"
+  ]
+}
