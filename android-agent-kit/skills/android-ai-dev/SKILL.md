@@ -5,8 +5,9 @@ description: Android app development playbook (Android Dev Summit 2026). Use whe
 
 # Android AI development playbook
 
-Follow these rules for any Android work. Detailed references are in this plugin's `docs/` folder, two levels
-above this skill's base directory (`<base>/../../docs/`). Read only the doc the task needs.
+Follow these rules for any Android work. Detailed references are in `<base>/docs/` when installed with
+`install.sh --user`, otherwise in the plugin's `docs/` folder two levels up (`<base>/../../docs/`), where
+`<base>` is this skill's base directory. Read only the doc the task needs.
 
 | Task | Read |
 |---|---|

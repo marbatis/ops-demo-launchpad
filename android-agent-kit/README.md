@@ -25,11 +25,13 @@ its full transcript, and Google's follow-up developer blog posts. Timestamps in 
 
 ## How to get it into every project
 
-There are three ways, and they combine:
+There are four ways, and they combine:
 
-### 1. New app: start from the template repo
-Create the repo from **marbatis/android-ai-starter** ("Use this template" on GitHub), then create the Android
-project in that folder with Android Studio (Empty Activity, Compose). The kit files are already in place.
+### 1. New app: start from a template repo
+Keep a GitHub template repo (e.g. `marbatis/android-ai-starter`) that was created by running
+`install.sh` on an empty repo and ticking **Settings → Template repository**. New apps: "Use this template",
+then create the Android project in that folder with Android Studio (Empty Activity, Compose).
+Without a template repo, run `install.sh` on the new project folder; the result is the same.
 
 ### 2. Claude Code plugin: available in every project, every session
 ```
@@ -42,7 +44,14 @@ This gives Claude Code, in any project:
 
 Update later with `/plugin marketplace update marbatis-tools`.
 
-### 3. Any existing project, any agent: the installer
+### 3. This computer, without the plugin marketplace
+```bash
+bash path/to/ops-demo-launchpad/android-agent-kit/install.sh --user
+```
+Installs the subagents and the `android-ai-dev` skill (with the docs) into `~/.claude`, so local Claude Code
+sessions have them in every project. Re-run with `--force` after pulling kit updates.
+
+### 4. Any existing project, any agent: the installer
 ```bash
 bash path/to/ops-demo-launchpad/android-agent-kit/install.sh path/to/my-android-app
 ```

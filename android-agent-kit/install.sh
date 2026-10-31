@@ -2,7 +2,10 @@
 # Install the Android Agent Kit into an Android project.
 #
 # Usage: install.sh [--force] [TARGET_DIR]
+#        install.sh --user [--force]
 #   TARGET_DIR  project root (default: current directory)
+#   --user      install for Claude Code on this computer (~/.claude): subagents
+#               and the android-ai-dev skill, active in every project
 #   --force     overwrite kit-owned files that already exist
 #
 # Never overwrites a project's own docs/journeys.md, and only appends an
@@ -11,18 +14,17 @@ set -euo pipefail
 
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FORCE=0
+USER_MODE=0
 TARGET="."
 
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    --user) USER_MODE=1 ;;
+    -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
     *) TARGET="$arg" ;;
   esac
 done
-
-TARGET="$(cd "$TARGET" && pwd)"
-echo "Installing Android Agent Kit into $TARGET"
 
 copy() {
   local src="$1" dst="$2"
@@ -34,6 +36,23 @@ copy() {
     echo "  write  ${dst#$TARGET/}"
   fi
 }
+
+if [[ $USER_MODE -eq 1 ]]; then
+  TARGET="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+  echo "Installing Android Agent Kit for Claude Code into $TARGET"
+  for agent in "$KIT_DIR"/templates/.claude/agents/*.md; do
+    copy "$agent" "$TARGET/agents/$(basename "$agent")"
+  done
+  copy "$KIT_DIR/skills/android-ai-dev/SKILL.md" "$TARGET/skills/android-ai-dev/SKILL.md"
+  for doc in "$KIT_DIR"/docs/*.md; do
+    copy "$doc" "$TARGET/skills/android-ai-dev/docs/$(basename "$doc")"
+  done
+  echo "Done. Restart Claude Code; the android-ai-dev skill and subagents are now available everywhere."
+  exit 0
+fi
+
+TARGET="$(cd "$TARGET" && pwd)"
+echo "Installing Android Agent Kit into $TARGET"
 
 copy "$KIT_DIR/AGENTS.md" "$TARGET/AGENTS.md"
 
