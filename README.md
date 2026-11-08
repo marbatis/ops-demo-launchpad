@@ -81,3 +81,17 @@ git push heroku main
 2. Update [`config/apps.json`](/Users/marcelosilveira/Documents/Playground/config/apps.json) with the confirmed URL.
 3. Flip `enabled` to `true` for that app.
 4. Deploy this launchpad app to Heroku.
+
+## Instagram: who isn't following back
+
+`scripts/instagram_not_following_back.py` lists accounts that the Instagram account follows but that don't follow it back. It reads Instagram's official data export offline, so there's no login, no scraping and no third-party app.
+
+1. In Instagram: **Settings → Accounts Center → Your information and permissions → Download your information → Download or transfer information**. Pick the account, choose **Some of your information → Followers and following**, then **Download to device**, format **JSON**, date range **All time**.
+2. When the download is ready (usually within minutes to hours), save the `.zip`.
+3. Run:
+
+```bash
+python3 scripts/instagram_not_following_back.py ~/Downloads/instagram-export.zip --csv not_following_back.csv
+```
+
+The list is printed and also saved to the CSV, with username, profile URL and the date you followed them. The script accepts either the zip or the unzipped folder, and either the JSON or HTML export.
